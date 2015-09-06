@@ -1,0 +1,149 @@
+#!/usr/bin/env python
+
+import urllib2, json, sys, subprocess, os
+
+XKCD_CSVFILE	= '/tmp/xkcd.csv'
+XKCD_IMGFILE	= '/tmp/xkcd.png'
+XKCD_DEFAULTURL	= 'http://xkcd.com/info.0.json'
+XKCD_COMICURL	= 'http://xkcd.com/{}/info.0.json'
+REFRESH_SCRIPT	= '''
+tell application "GeekTool Helper"
+	set outofdate_gls to every geeklet whose name starts with "xkcd" and name does not end with "shell"
+	repeat with gl in outofdate_gls
+		refresh gl
+	end repeat
+end tell
+'''
+
+
+
+
+
+def parse_csvfile():
+	try:
+		csvfile = open(XKCD_CSVFILE, 'r')
+
+		body = csvfile.read()
+
+		csvfile.close()
+
+		# now parse
+
+		table = [ tuple(row.split('\t')) for row in body.split('\n') ]
+		output = dict( [ kvp for kvp in table if len(kvp) == 2 ])
+
+		return output
+
+	except Exception, e:
+
+		return None
+
+def write_csvfile(data):
+	try:
+		csvfile = open(XKCD_CSVFILE, 'w')
+
+		for key in data:
+			csvfile.write(key + '\t' + str(data[key]) + '\n')
+
+		csvfile.close()
+
+		return True;
+
+	except Exception, e:
+		
+		return False
+
+def parse_xkcd_json(json):
+	return {
+			'date':		json['day'] + '/' + json['month'] + '/' + json['year'],
+			'num':		json['num'],
+			'title':	json['safe_title'],
+			'alt':		json['alt'],
+			'url':		json['img']
+		}
+
+
+def download_picture(url):
+	try:
+		response = urllib2.urlopen(url)
+
+		csvfile = open(XKCD_IMGFILE, 'wb')
+
+		csvfile.write(response.read())
+
+		csvfile.close()
+		response.close()
+
+		return True
+
+	except Exception, e:
+		return False
+
+def get_xkcd_data(comic = None):
+
+	if comic is None:
+		url = XKCD_DEFAULTURL
+	else:
+		url = XKCD_COMICURL.format(str(int(comic)))
+
+	try:
+
+		response = urllib2.urlopen(url)
+
+		data = json.load(response)
+
+		response.close()
+
+		return parse_xkcd_json(data)
+
+	except Exception, e:
+
+		return None
+	
+
+
+
+
+
+if __name__ == '__main__':
+
+	# first param is comic number
+	comic = None
+	if len(sys.argv) > 1:
+		comic = int(sys.argv[1])
+
+	# load the data if possible
+	xkcd_data = get_xkcd_data(comic)
+
+	if xkcd_data is None:
+		sys.exit(1)
+
+	# check if the csvfile exists
+	if os.path.exists(XKCD_CSVFILE):
+
+		xkcd_currentdata = parse_csvfile()
+
+		if not xkcd_currentdata is None:
+
+			# check if we have anything to do
+			if xkcd_currentdata['num'] == xkcd_data['num']:
+				sys.exit(0)
+
+	# download image!
+	if not download_picture(xkcd_data['url']):
+		sys.exit(2)
+
+	# save also data
+	if not write_csvfile(xkcd_data):
+		os.remove(XKCD_IMGFILE)
+		os.remove(XKCD_CSVFILE)
+
+		sys.exit(3)
+
+	# refresh geektools if possible
+	try:
+
+		subprocess.call(['osascript', '-e', REFRESH_SCRIPT])
+
+	finally:
+		sys.exit(0)
