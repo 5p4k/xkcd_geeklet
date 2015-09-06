@@ -1,124 +1,168 @@
 #!/usr/bin/env python
-import json, sys, subprocess, os, io
+import json, sys, subprocess, os, codecs, datetime, argparse
 import urllib.request as request
 
-XKCD_CSVFILE    = '/tmp/xkcd.csv'
-XKCD_IMGFILE    = '/tmp/xkcd.png'
-XKCD_DEFAULTURL = 'http://xkcd.com/info.0.json'
-XKCD_COMICURL   = 'http://xkcd.com/{}/info.0.json'
-REFRESH_SCRIPT  = '''
-tell application "GeekTool Helper" to refresh (every geeklet whose name starts with "xkcd" and name does not end with "shell")
-'''
+def stderr(data):
+    sys.stderr.write(str(data) + '\n')
+def stdout(data):
+    sys.stdout.write(str(data) + '\n')
 
-def parse_csvfile():
-    # try:
-        csvfile = io.open(XKCD_CSVFILE, 'r', encoding='utf8')
+class Xkcd(object):
+    JSON_FILE    = '/tmp/xkcd.json'
+    IMG_FILE    = '/tmp/xkcd.png'
+    DEFAULT_URL = 'http://xkcd.com/info.0.json'
+    COMIC_URL   = 'http://xkcd.com/%d/info.0.json'
+    REFRESH_SCRIPT  = '''
+    tell application "GeekTool Helper" to refresh (every geeklet whose name starts with "xkcd" and name does not end with "shell")
+    '''
 
-        body = csvfile.read()
+    def __getattr__(self, name):
+        if name in ['safe_title', 'alt', 'img']:
+            if self._json is None or name not in self._json:
+                return None
+            else:
+                return self._json[name]
+        elif name in ['day', 'month', 'year', 'num']:
+            if self._json is None or name not in self._json:
+                return None
+            else:
+                return int(self._json[name])
+        elif name == 'date':
+            return datetime.date(self.year, self.month, self.day)
+        else:
+            return super(Xkcd, self).__getattr__(name)
 
-        csvfile.close()
-
-        # now parse
-
-        table = [ tuple(row.split('\t')) for row in body.split('\n') ]
-        output = dict( [ kvp for kvp in table if len(kvp) == 2 ])
-
-        return output
-
-    # except:
-
-    #     return None
-
-def write_csvfile(data):
-    # try:
-        with io.open(XKCD_CSVFILE, 'w', encoding='utf8') as csvfile:
-            for key in data:
-                csvfile.write(str(key) + '\t' + str(data[key]) + '\n')
-        return True
-
-    # except:
-
-    #     return False
-
-def parse_xkcd_json(json):
-    return {
-            'date':     json['day'] + '/' + json['month'] + '/' + json['year'],
-            'num':      json['num'],
-            'title':    json['safe_title'],
-            'alt':      json['alt'],
-            'url':      json['img']
-        }
-
-
-def download_picture(url):
-    try:
-        with request.urlopen(url) as response:
-            with io.open(XKCD_IMGFILE, 'wb') as csvfile:
-                csvfile.write(response.read())
-        return True
-    except:
+    def _load_json_file(self):
+        if not os.path.isfile(self.JSON_FILE):
+            return False
+        try:
+            with codecs.open(self.JSON_FILE, 'r', 'utf-8') as json_file:
+                self._json = json.load(json_file)
+                return True
+        except PermissionError as e:
+            stderr('Insufficient permission to read %s.' % self.JSON_FILE)
+            stderr(e)
+        except Exception as e:
+            stderr('Json file %s could\'t be parsed.' % self.JSON_FILE)
+            stderr(e)
+            try:
+                os.remove(self.JSON_FILE)
+            except Exception as e:
+                stderr('Unable to remove ill-formatted file %s.' % self.JSON_FILE)
+                stderr(e)
         return False
 
-def get_xkcd_data(comic = None):
+    def _dump_json_file(self):
+        try:
+            with codecs.open(self.JSON_FILE, 'w', 'utf-8') as json_file:
+                json.dump(self._json, json_file)
+                return True
+        except PermissionError as e:
+            stderr('Insufficient permission to write %s.' % self.JSON_FILE)
+            stderr(e)
+        except Exception as e:
+            stderr('Unable to write xkcd data on %s.' % self.JSON_FILE)
+            stderr(e)
+        return False
 
-    if comic is None:
-        url = XKCD_DEFAULTURL
+    def _download_img(self):
+        assert(self.img is not None)
+        try:
+            with request.urlopen(self.img) as response:
+                try:
+                    with open(self.IMG_FILE, 'wb') as img_file:
+                        img_file.write(response.read())
+                        return True
+                except PermissionError as e:
+                    stderr('Insufficient permission to write %s.' % self.IMG_FILE)
+                    stderr(e)
+                except Exception as e:
+                    stderr('Unable to write xkcd data on %s.' % self.IMG_FILE)
+                    stderr(e)
+        except Exception as e:
+            stderr('Network error opening %s.' % self.img)
+            stderr(e)
+        return False
+
+    def download_comic(self, comic=None):
+        assert(comic is None or isinstance(comic, int))
+        if self.num is not None and comic == self.num:
+            return True
+
+        url = self.DEFAULT_URL if comic is None else (self.COMIC_URL % comic)
+        try:
+            with request.urlopen(url) as response:
+                old_num = self.num
+                self._json = json.loads(response.read().decode('utf-8'))
+                self._dump_json_file()
+                if old_num == self.num:
+                    return True
+                if not 'img' in self._json:
+                    stderr('Wrong json format for xkcd: image url is missing.')
+                    return False
+                else:
+                    return self._download_img()
+        except Exception as e:
+            stderr('Network error while fetching %s.' % url)
+            stderr(e)
+        return False
+
+    def load_local_comic(self):
+        if self._load_json_file():
+            if not os.path.isfile(self.IMG_FILE):
+                if not 'img' in self._json:
+                    stderr('Wrong json format for xkcd: image url is missing.')
+                    try:
+                        os.remove(self.JSON_FILE)
+                    except:
+                        pass
+                    return False
+                else:
+                    return self._download_img()
+            return True
+        return False
+
+    def refresh_geektools(self):
+        try:
+            subprocess.call(['osascript', '-e', REFRESH_SCRIPT])
+            return True
+        except:
+            return False
+
+    def __init__(self):
+        super(Xkcd, self).__init__()
+        self._json = None
+        self.load_local_comic()
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Download and print info about xkcd comics.')
+    parser.add_argument('-r', '--remote', metavar='num', nargs='?', type=int, help='download remote comic of given number; 0 or omit to download the latest (default)')
+    parser.add_argument('-l', '--local', action='store_true', help='load locally saved comic (if cached); overrides --remote')
+    parser.add_argument('-u', '--update', action='store_true', help='refreshes GeekTools')
+    parser.add_argument('-g', '--get', nargs=1, required=False, choices=['day', 'month', 'year', 'num', 'safe_title', 'alt', 'img', 'date'], help='print out an attribute of the comic')
+
+    args = parser.parse_args(sys.argv[1:])
+    xkcd = Xkcd()
+    if args.local:
+        if xkcd.num is None:
+            stderr('No local comic cached.')
+            sys.exit(1)
     else:
-        url = XKCD_COMICURL.format(str(int(comic)))
+        if not xkcd.download_comic(comic=args.remote):
+            stderr('Unable to download comic.')
+            sys.exit(1)
+    if args.update:
+        xkcd.refresh_geektools()
 
-    # try:
-        with request.urlopen(url) as response:
-            data = json.loads(response.read().decode('utf-8'))
-        return parse_xkcd_json(data)
-
-    # except:
-
-    #     return None
-
-
-
-
-
+    if args.get is not None:
+        value = getattr(xkcd, args.get[0], None)
+        if value is None:
+            stderr('Attribute %s is undefined.' % args.get)
+            sys.exit(1)
+        else:
+            stdout(value)
+    sys.exit(0)
 
 if __name__ == '__main__':
-
-    # first param is comic number
-    comic = None
-    if len(sys.argv) > 1:
-        comic = int(sys.argv[1])
-
-    # load the data if possible
-    xkcd_data = get_xkcd_data(comic)
-
-    if xkcd_data is None:
-        sys.exit(1)
-
-    # check if the csvfile exists
-    if os.path.exists(XKCD_CSVFILE):
-
-        xkcd_currentdata = parse_csvfile()
-
-        if not xkcd_currentdata is None:
-
-            # check if we have anything to do
-            if xkcd_currentdata['num'] == xkcd_data['num']:
-                sys.exit(0)
-
-    # download image!
-    if not download_picture(xkcd_data['url']):
-        sys.exit(2)
-
-    # save also data
-    if not write_csvfile(xkcd_data):
-        os.remove(XKCD_IMGFILE)
-        os.remove(XKCD_CSVFILE)
-
-        sys.exit(3)
-
-    # refresh geektools if possible
-    try:
-
-        subprocess.call(['osascript', '-e', REFRESH_SCRIPT])
-
-    finally:
-        sys.exit(0)
+    main()
