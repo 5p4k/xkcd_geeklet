@@ -13,7 +13,7 @@ Installation
 ------------
 The Geeklets invoke the xkcd script via
     `/opt/local/bin/python /usr/local/bin/xkcd <args>`
-This because I am using MacPorts's Python, and I have symlinked `xkcd` to `/usr/local/bin`. Edit the Geeklets according to your configurations.
+This because I am using MacPorts's Python, and I have symlinked `xkcd` to `/usr/local/bin`. Edit the Geeklets according to your configurations. I tried to write anything more portable but GeekTools just fails, see [issue #2](https://github.com/LizardM4/xkcd_geeklet/issues/2).
 
 Usage
 -----
@@ -24,5 +24,3 @@ Crash course:
   - __Download latest comic:__ `xkcd --remote`
   - __Automatically refresh GeekTools:__ append `--update` to the xkcd command.
   - __Extract attributes:__ `xkcd --remote <optional num> --get <attrib>` or `xkcd --local --get <attrib>` to load the currently cached comic. To see the list of available attributes call `xkcd --help`.
-
-Autor: @5p4k
