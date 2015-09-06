@@ -5,7 +5,7 @@
 	<key>Alignment</key>
 	<integer>3</integer>
 	<key>GeekletFrame</key>
-	<string>{{88, 129}, {1301, 401}}</string>
+	<string>{{8, 34}, {521, 340}}</string>
 	<key>HasShadow</key>
 	<true/>
 	<key>Identifier</key>
@@ -15,6 +15,6 @@
 	<key>Name</key>
 	<string>xkcd comic</string>
 	<key>RefreshInterval</key>
-	<integer>0</integer>
+	<integer>7200</integer>
 </dict>
 </plist>

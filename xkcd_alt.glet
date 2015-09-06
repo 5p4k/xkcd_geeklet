@@ -8,7 +8,7 @@
 	ZmZmAQEBAIY=
 	</data>
 	<key>Command</key>
-	<string>cat /tmp/xkcd.csv | grep alt | cut -f 2</string>
+	<string>/opt/local/bin/python /usr/local/bin/xkcd --local --get alt</string>
 	<key>DropShadow</key>
 	<false/>
 	<key>FailureImage</key>
@@ -107,7 +107,7 @@
 	<key>ForceCR</key>
 	<true/>
 	<key>GeekletFrame</key>
-	<string>{{894, 59}, {394, 45}}</string>
+	<string>{{532, 80}, {395, 46}}</string>
 	<key>HasShadow</key>
 	<true/>
 	<key>Identifier</key>
@@ -115,7 +115,7 @@
 	<key>Name</key>
 	<string>xkcd alt</string>
 	<key>RefreshInterval</key>
-	<integer>0</integer>
+	<integer>7200</integer>
 	<key>RightToLeft</key>
 	<false/>
 	<key>SetLocale</key>
@@ -212,7 +212,7 @@
 	ivgZ+Kj5OPnH+lf65/t3/Af8mP0p/br+S/7c/23//w==
 	</data>
 	<key>TextAlignment</key>
-	<integer>1</integer>
+	<integer>0</integer>
 	<key>TextColor</key>
 	<data>
 	BAtzdHJlYW10eXBlZIHoA4QBQISEhAdOU0NvbG9yAISECE5TT2JqZWN0AIWEAWMBhARm
